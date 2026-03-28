@@ -11,7 +11,11 @@ import uuid
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from pqcrypto.kem import kyber512
+
+try:
+    from pqcrypto.kem import ml_kem_512 as _pqc_kem
+except ImportError:
+    from pqcrypto.kem import kyber512 as _pqc_kem
 
 from .peer import Peer
 from .utils import PacketType
@@ -31,7 +35,7 @@ class Client:
         self.file_chunk_size = 16 * 1024
         self.incoming_files = {}
 
-        self.pqc_public_key, self.pqc_private_key = kyber512.generate_keypair()
+        self.pqc_public_key, self.pqc_private_key = _pqc_kem.generate_keypair()
         self.peer = None
         self.session_key = None
 
@@ -393,7 +397,10 @@ class Client:
         return cleartext.decode()
 
     def _exchange_pqc_kem(self, conn: socket.socket, peer_pqc_pubkey: bytes) -> None:
-        ct_out, ss_out = kyber512.encapsulate(peer_pqc_pubkey)
+        if hasattr(_pqc_kem, "encapsulate"):
+            ct_out, ss_out = _pqc_kem.encapsulate(peer_pqc_pubkey)
+        else:
+            ct_out, ss_out = _pqc_kem.encrypt(peer_pqc_pubkey)
         self.send(conn, self.make_packet(PacketType.KEM, base64.b64encode(ct_out).decode()))
 
         packet_type, payload = self.read_packet(conn, expect_hello=True)
@@ -401,7 +408,10 @@ class Client:
             raise ValueError("Expected KEM packet")
 
         ct_in = base64.b64decode(payload["content"].encode())
-        ss_in = kyber512.decapsulate(ct_in, self.pqc_private_key)
+        if hasattr(_pqc_kem, "decapsulate"):
+            ss_in = _pqc_kem.decapsulate(ct_in, self.pqc_private_key)
+        else:
+            ss_in = _pqc_kem.decrypt(self.pqc_private_key, ct_in)
 
         # deterministic combine: order by public key bytes
         if self.pqc_public_key < peer_pqc_pubkey:

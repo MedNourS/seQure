@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "sequre-server"
 version = "0.1.0"
 description = "seQure relay server"
-readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 

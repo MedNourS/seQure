@@ -1,7 +1,14 @@
 import json
+import logging
 import socket
 import threading
 import time
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [relay] %(message)s",
+)
 
 
 class RelayServer:
@@ -18,14 +25,25 @@ class RelayServer:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
 
+    def _log_state(self, event: str, **details) -> None:
+        with self._lock:
+            active_records = len(self._records)
+
+        detail_str = " ".join(f"{key}={value}" for key, value in sorted(details.items()))
+        if detail_str:
+            logging.info("%s | active_records=%d | %s", event, active_records, detail_str)
+        else:
+            logging.info("%s | active_records=%d", event, active_records)
+
     def serve_forever(self) -> None:
         cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         cleanup_thread.start()
 
-        print(f"Relay listening on {self.host}:{self.port}")
+        logging.info("Relay listening on %s:%d ttl=%ds", self.host, self.port, self.ttl_seconds)
         try:
             while not self._stop_event.is_set():
                 conn, addr = self._sock.accept()
+                self._log_state("client_connected", client=f"{addr[0]}:{addr[1]}")
                 handler = threading.Thread(target=self._handle_client, args=(conn, addr), daemon=True)
                 handler.start()
         finally:
@@ -43,6 +61,8 @@ class RelayServer:
                 ]
                 for key in expired:
                     self._records.pop(key, None)
+            if expired:
+                self._log_state("cleanup_expired", removed=len(expired))
             time.sleep(5)
 
     def _handle_client(self, conn: socket.socket, addr: tuple[str, int]) -> None:
@@ -73,6 +93,7 @@ class RelayServer:
                 else:
                     self._send(file, {"ok": False, "error": "unknown_action"})
         finally:
+            self._log_state("client_disconnected", client=f"{addr[0]}:{addr[1]}")
             try:
                 file.close()
             finally:
@@ -98,6 +119,13 @@ class RelayServer:
                 "updated_at": now,
             }
 
+        self._log_state(
+            "register",
+            uuid_hash=uuid_hash,
+            ip=addr[0],
+            port=listen_port,
+        )
+
         self._send(
             file,
             {
@@ -122,6 +150,8 @@ class RelayServer:
                 self._records.pop(uuid_hash, None)
                 removed = True
 
+        self._log_state("unregister", uuid_hash=uuid_hash, removed=removed)
+
         self._send(file, {"ok": True, "action": "unregister", "uuid_hash": uuid_hash, "removed": removed})
 
     def _handle_resolve(self, file, req: dict) -> None:
@@ -134,8 +164,11 @@ class RelayServer:
             record = self._records.get(uuid_hash)
 
         if not record:
+            self._log_state("resolve_miss", uuid_hash=uuid_hash)
             self._send(file, {"ok": False, "error": "not_found"})
             return
+
+        self._log_state("resolve_hit", uuid_hash=uuid_hash, ip=record["ip"], port=record["port"])
 
         self._send(
             file,
@@ -161,6 +194,8 @@ class RelayServer:
                 }
                 for rec in self._records.values()
             ]
+
+        self._log_state("list", returned=len(records))
 
         self._send(file, {"ok": True, "action": "list", "count": len(records), "records": records})
 

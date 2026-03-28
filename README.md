@@ -39,7 +39,7 @@ sequre --relay-host 127.0.0.1 --relay-port 9999
 
 1. The clients connect to a relay, which is only used to store a UUID hash and a network socket
 2. The client attempts to connect to a peer, and waits for the peer to connect back to the client
-3. On a mutual connection, an intro packet is sent with the client's public key and a random nonce
+3. On a mutual connection, an intro packet is sent with the client's public key and a random nonce (using Kyber512 KEM)
 4. The receiving client performs a PQC key exchange using Kyber512, and sends back an intro response with its own public key and nonce
 5. Both clients compute the shared secret and derive a symmetric session key, which is used to encrypt all subsequent payloads with ChaCha20‑Poly1305
 6. Clients can exchange encrypted chat messages and files until one client sends a BYE packet or disconnects

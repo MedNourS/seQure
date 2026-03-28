@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "sequre-cli"
 version = "0.1.0"
 description = "seQure PQC CLI client"
-readme = "../README.md"
 requires-python = ">=3.10"
 dependencies = [
   "cryptography>=42.0.0,<43.0.0",
