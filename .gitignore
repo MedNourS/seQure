@@ -1,0 +1,9 @@
+.venv/
+*.pem
+downloads/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+known_peers.json
