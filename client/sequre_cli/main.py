@@ -29,13 +29,14 @@ def relay_unregister(relay_host: str, relay_port: int, my_hash: str) -> None:
         pass
 
 
-def print_relay_records(list_response: dict) -> None:
+def print_relay_records(list_response: dict, my_hash: str | None = None) -> None:
     if not list_response.get("ok"):
         print(f"Relay list failed: {list_response}")
         return
 
-    records = list_response.get("records", [])
-    print(f"Active relay records: {list_response.get('count', len(records))}")
+    all_records = list_response.get("records", [])
+    records = [rec for rec in all_records if rec.get("uuid_hash") != my_hash]
+    print(f"Active relay records: {len(records)}")
     if not records:
         print("- No peers registered yet")
         return
@@ -71,7 +72,7 @@ def run() -> None:
     list_choice = input("Show active relay records now? [y/N]\n> ").strip().lower()
     if list_choice in {"y", "yes"}:
         list_response = relay_request(args.relay_host, args.relay_port, {"action": "list"})
-        print_relay_records(list_response)
+        print_relay_records(list_response, my_hash=my_hash)
 
     target_ip = None
     target_port = None
@@ -82,7 +83,7 @@ def run() -> None:
             continue
         if peer_identifier.lower() == "/list":
             list_response = relay_request(args.relay_host, args.relay_port, {"action": "list"})
-            print_relay_records(list_response)
+            print_relay_records(list_response, my_hash=my_hash)
             continue
 
         peer_hash = peer_identifier.lower() if len(peer_identifier.strip()) == 64 else uuid_hash(peer_identifier)
